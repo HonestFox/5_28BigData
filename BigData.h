@@ -19,22 +19,17 @@ public:
 	BigData operator- (const BigData &bigData);
 	BigData operator* (const BigData &bigData);
 	BigData operator/ (const BigData &bigData);
-
 	string Add(string left, string right);
 	string Sub(string left, string right);
 	string Mul(string left, string right);
 	string Div(string left, string right);
-
-
 	bool IsINT64Overflow() const;
 	friend ostream &operator<<(ostream &os, BigData &bd);
-
-
-
 protected:
 	char SubLoop(char* pLeft, int LSize, char *pRight, int RSize);
 	bool IsLeftBig(char* pLeft, int LSize, char *pRight, int RSize);
-//public:
+	size_t _GetSize(INT64 value);
+protected:
 	INT64 _value;
 	string _strData;
 };
