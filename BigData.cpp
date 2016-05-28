@@ -1,12 +1,37 @@
 #include "BigData.h"
 #include <cassert>
+#include <cstdlib>
 #define MAX_INT64 0x7FFFFFFFFFFFFFFF
 #define MIN_INT64 0x8000000000000000
 
 BigData::BigData(INT64 value)
 	:_value(value)
 {
-	//处理
+	//先获取value的位数
+	int sz = _GetSize(value);
+	_strData.resize(sz + 1);
+	_strData[0] = '+';
+	if (value < 0)
+	{
+		_strData[0] = '-';
+	}
+	char *StrTmp = new char[sz + 2];
+	_i64toa_s((INT64)value, StrTmp, sz + 2, 10);
+	if (value > 0)
+	{
+		for (int Idx = 1; Idx <= sz; Idx++)
+		{
+			_strData[Idx] = StrTmp[Idx - 1];
+		}
+	}
+	else
+	{
+		for (int Idx = 1; Idx <= sz; Idx++)
+		{
+			_strData[Idx] = StrTmp[Idx];
+		}
+	}
+	delete []  StrTmp;
 }
 
 BigData::BigData(char * pData)
@@ -46,18 +71,13 @@ BigData::BigData(char * pData)
 	if (*pData != '\0')
 	{
 		_strData.resize(iCount + 1);
-		//**********
-	//	_strData[_strData.size() - 1] = '\0';
-		//**********
 	}
-
 	if (cSymbol == '-')
 	{
 		_value = 0 - _value;
 		_strData[0] = '-';
 	}
 }
-
 
 bool BigData::IsINT64Overflow() const
 {
@@ -109,23 +129,22 @@ BigData BigData::operator+(const BigData & bigData)
 {
 	if (!IsINT64Overflow() && !bigData.IsINT64Overflow())
 	{
-		if (_strData[0] != bigData._strData[0])
+		if (_strData[0] != bigData._strData[0])		//符号位不同，则可以直接运算，肯定不会溢出的
 		{
 			return BigData(_value + bigData._value);
 		}
-		else
-		{  //！！！！！！！待修改！！！！！！！！！！！！
-
+		else             //else里面处理符号相同的情况
+		{  
+			// -10         -7 + -1             -10 - -7 
 			if(
 				(_strData[0] == '+' && (MAX_INT64 - _value) >= bigData._value)
 			||( _strData[0] == '-' &&   (MIN_INT64 - _value) <= bigData._value)
-				)
+				)			//保证在范围内，直接运算
 			{
 				return BigData(_value + bigData._value);
 			}
 		}
 	}
-
 	//操作数至少有一个溢出
 	//或相加的结果溢出
 	if (_strData[0] == bigData._strData[0] )
@@ -134,10 +153,7 @@ BigData BigData::operator+(const BigData & bigData)
 	}
 	//符号相反
 	return BigData((char*)Sub(_strData, bigData._strData).c_str());
-
-
 }
-
 
 //只要进入Add，则一定符号相同
 string BigData::Add(string left, string right)
@@ -153,9 +169,8 @@ string BigData::Add(string left, string right)
 	string strRet;
 	strRet.resize(LSize + 1);
 	strRet[0] = left[0];
-
 	//从低位到高位，逐位相加
-	for (int index = 1; index > LSize; index++)
+	for (int index = 1; index < LSize; index++)
 	{
 		char cRet = left[LSize - index] + cStep - '0';
 		if (RSize - index > 0)
@@ -169,8 +184,6 @@ string BigData::Add(string left, string right)
 	return strRet;
 }
 
-
-
 /*
 	减法
 	如果两个数据都没有溢出
@@ -182,26 +195,31 @@ BigData BigData::operator-(const BigData & bigData)
 {
 	if (!IsINT64Overflow() && !bigData.IsINT64Overflow() )
 	{
-		if (_strData[0] == bigData._strData[0])
+		if (_strData[0] == bigData._strData[0])			//都在范围内，符号相同
 		{
 			return BigData(_value - bigData._value);
 		}
-		else
+		else                     //都在范围内，但符号不同
 		{
-			if (																																			//大家来检查下
-				(_strData[0] == '+' && (MAX_INT64 - _value) >= bigData._value)
-				|| (_strData[0] == '-' && (MIN_INT64 - _value) <= bigData._value)
+			if (				//  保证在范围内的情况															
+				(_strData[0] == '+' && (MAX_INT64 - _value) >= (bigData._value * -1) )
+				|| (_strData[0] == '-' && (MIN_INT64 - _value) <= (bigData._value * -1) )
 				)
 			{
 				return BigData(_value - bigData._value);
 			}
+			else    //可能在范围外的情况
+			{
+				return BigData((char*)Sub(_strData, bigData._strData).c_str());
+			}
 		}
 	}
-	//
-	if (_strData[0] != bigData._strData[0])
+	else if (_strData[0] != bigData._strData[0])	//一定在范围外的情况
 	{
 		return BigData((char*)Sub(_strData, bigData._strData).c_str() );
 	}
+	return BigData((char*)Sub(_strData, bigData._strData).c_str());
+
 }
 
 string BigData::Sub(string left, string right)
@@ -316,7 +334,7 @@ BigData BigData::operator/(const BigData & bigData)
 		{
 			ret[0] = '-';
 		}
-		return BigData(ret.c_str);
+		return BigData((char*)ret.c_str() );
 	}
 	if (_strData.size() == bigData._strData.size() &&
 		strcmp(_strData.c_str() + 1, bigData._strData.c_str() + 1) == 0)
@@ -326,9 +344,9 @@ BigData BigData::operator/(const BigData & bigData)
 		{
 			ret[0] = '-';
 		}
-		return BigData(ret.c_str);
+		return BigData((char*)ret.c_str());
 	}
-	return BigData( Div(_strData, bigData._strData).c_str);
+	return BigData( (char*) (Div(_strData, bigData._strData).c_str()) );
 }
 
 
@@ -525,4 +543,15 @@ bool BigData::IsLeftBig(char * pLeft, int LSize, char * pRight, int RSize)
 		return true;
 	}
 	return false;
+}
+
+size_t BigData::_GetSize(INT64 value)
+{
+	int ret = 1;
+	while (value >= 10 || value <= -10)
+	{
+		value /= 10;
+		++ret;
+	}
+	return ret;
 }
