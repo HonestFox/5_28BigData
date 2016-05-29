@@ -224,17 +224,36 @@ BigData BigData::operator-(const BigData & bigData)
 
 string BigData::Sub(string left, string right)
 {
-	//发生调用该函数时，left和right两个参数一定是相同符号的
 	int LSize = left.size();
 	int RSize = right.size();
 	char cSymbol = left[0];
-	if (LSize < RSize || LSize == RSize && left < right)		//这种情况下，减出来的结果一定为负数
+
+	string strRet;
+	strRet.resize(left.size());
+	strRet[0] = cSymbol;
+	
+	//如果符号相反，则忽略符号位做加法，然后再添上符号位（左数的符号位）
+	if (left[0] != right[0])
+	{
+		right[0] = cSymbol;
+		strRet = Add(left, right);
+		return strRet;
+	}
+
+	if (LSize < RSize || LSize == RSize  && left < right)
 	{
 		swap(left, right);				//有问题
 		swap(LSize, RSize);
-		if (cSymbol = '+')
+		if (left[0] == '+')
 		{
-			cSymbol = '-';				//所以每次符号都一定是负号
+			if (cSymbol = '+')
+			{
+				cSymbol = '-';				//所以每次符号都一定是负号
+			}
+			else
+			{
+				cSymbol = '+';
+			}
 		}
 		else
 		{
@@ -242,9 +261,6 @@ string BigData::Sub(string left, string right)
 		}
 	}
 
-	string strRet;
-	strRet.resize(left.size() );
-	strRet[0] = cSymbol;
 	//逐位做减法
 	for (int iIdx = 1; iIdx < LSize; iIdx++)
 	{
@@ -261,6 +277,7 @@ string BigData::Sub(string left, string right)
 		}
 		strRet[LSize - iIdx] = cRet + '0';
 	}
+	strRet[0] = cSymbol;
 	return strRet;
 }
 
