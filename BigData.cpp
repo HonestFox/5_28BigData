@@ -38,6 +38,13 @@ BigData::BigData(char * pData)
 {
 	assert(pData);
 	char cSymbol = pData[0];
+	if (cSymbol == '0' && strlen(pData) == 1)
+	{
+		_value = 0;
+		_strData.resize(1);
+		_strData[0] = '+';
+		return;
+	}
 	//处理第一位
 	if (cSymbol >= '0' && cSymbol <= '9')
 	{
@@ -294,7 +301,7 @@ BigData BigData::operator*(const BigData & bigData)
 {
 	if (!IsINT64Overflow() && !bigData.IsINT64Overflow() )
 	{
-		//如果两个操作数有一个为0 直接返回0   这里检查一下，有可能有问题
+		//如果两个操作数有一个为0 直接返回0  
 		if (_value == 0 || bigData._value == 0)
 		{
 			return BigData("0");
@@ -303,8 +310,8 @@ BigData BigData::operator*(const BigData & bigData)
 		if (_strData[0] == bigData._strData[0] )	//如果符号相同
 		{
 			if (
-				_strData[0] == '+'  && MAX_INT64 / _value >= bigData._value				//这里检查一下，估计有问题
-				|| _strData[0] == '0' && MIN_INT64 / _value <= bigData._value
+				_strData[0] == '+'  && MAX_INT64 / _value >= bigData._value				
+				|| _strData[0] == '-' && MIN_INT64 / _value <= bigData._value
 				)
 			{
 				return BigData(_value * bigData._value);
@@ -312,39 +319,39 @@ BigData BigData::operator*(const BigData & bigData)
 		}
 		else    //异号
 		{
-			if (_strData[0] == '+'  && MAX_INT64 / _value <= bigData._value				//这里检查一下，估计有问题
-				|| _strData[0] == '0' && MIN_INT64 / _value >= bigData._value
+			if (_strData[0] == '+'  && MAX_INT64 / _value >= (bigData._value * -1)				
+				|| _strData[0] == '-' && MIN_INT64 / _value >= bigData._value
 				)
 			{
 				return BigData(_value * bigData._value);
 			}
 		}
 	}
+	if (_strData[1] == '0' || bigData._strData[1] == '0')
+	{
+		return BigData("0");
+	}
 	return BigData((char*)(Mul(_strData, bigData._strData).c_str()));
 }
-
-//BigData BigData::operator/(const BigData & bigData)
-//{
-//	return BigData();
-//}
 
 BigData BigData::operator/(const BigData & bigData)
 {
 	if (bigData._strData[1] == '0')
 	{
 		assert(false);
-		//
 	}
-	if (IsINT64Overflow() && bigData.IsINT64Overflow())
+	if (!IsINT64Overflow() && !bigData.IsINT64Overflow())			//范围内 直接运算
 	{
 		return BigData(_value / bigData._value);
 	}
-	if (_strData.size() < bigData._strData.size() ||
-		strcmp(_strData.c_str() + 1, bigData._strData.c_str() + 1) < 0 )			//还少一个条件
+
+	//范围外
+	if (_strData.size() < bigData._strData.size() ||				//左数为0  直接返回0
+		_strData.size() == bigData._strData.size() && strcmp(_strData.c_str() + 1, bigData._strData.c_str() + 1) < 0 )
 	{
-		return BigData(INT64(0));
+		return BigData("0");
 	}
-	if (bigData._strData == "+1" || bigData._strData == "-1")
+	if (bigData._strData == "+1" || bigData._strData == "-1")	    //右数为 +- 1
 	{
 		string ret = _strData;
 		if (_strData[0] != bigData._strData[0] )//异号
@@ -352,7 +359,7 @@ BigData BigData::operator/(const BigData & bigData)
 			ret[0] = '-';
 		}
 		return BigData((char*)ret.c_str() );
-	}
+	}																											//左数右数绝对值相等的情况
 	if (_strData.size() == bigData._strData.size() &&
 		strcmp(_strData.c_str() + 1, bigData._strData.c_str() + 1) == 0)
 	{
@@ -363,6 +370,7 @@ BigData BigData::operator/(const BigData & bigData)
 		}
 		return BigData((char*)ret.c_str());
 	}
+	
 	return BigData( (char*) (Div(_strData, bigData._strData).c_str()) );
 }
 
@@ -385,9 +393,13 @@ string BigData::Mul(string left, string right)
 	}
 	strRet[0] = cSymbol;
 
-	char cStep = 0;
+	char cStep = 0;		//进位
 	int  Datalen = strRet.size();
-	int offset = 0; //错位
+	int offset = 0;		//错位
+	for (int i = 1; i < Datalen; ++i)
+	{
+		strRet[i] += '0';
+	}
 	for (int iLidx = 1; iLidx < LSize; ++iLidx)
 	{
 		char cLeft = left[LSize - iLidx] - '0';
@@ -397,18 +409,28 @@ string BigData::Mul(string left, string right)
 			offset++;
 			continue;
 		}
-		for (int iRidx = 1; iRidx < RSize; ++iRidx)    //这里有问题，貌似是越界访问了
+		for (int iRidx = 1; iRidx < RSize; ++iRidx)
 		{
-			char cRet = cLeft * ( right[RSize - iRidx] - '0' );
-			cRet += strRet[LSize - iRidx - offset] - '0';
+			char cRet = cLeft * (right[RSize - iRidx] - '0');
+			//			cRet += (strRet[RSize - iRidx - offset] - '0');
 			cRet += cStep;
 			cStep = cRet / 10;
-			strRet[LSize - iRidx - offset] = (cRet % 10 + '0');
+			strRet[Datalen - iRidx - offset] += (cRet % 10);
+			while (strRet[Datalen - iRidx - offset] > '9')
+			{
+				++cStep;
+				strRet[Datalen - iRidx - offset] -= 10;
+			}
 		}
 		strRet[Datalen - RSize - offset] += cStep;
 		++offset;
 	}
-	return strRet;
+	//去掉前面的0
+	if (strRet[1] == '0')
+	{
+		strRet = BigData((char*)strRet.c_str())._strData;
+	}
+		return strRet;
 }
 
 /*
@@ -426,8 +448,6 @@ string BigData::Mul(string left, string right)
 
 		循环相减：
 		保证pLeft >= 除数  
-		(感觉老师写的那种用循环相减的方式有点麻烦了，直接相除 相%即可吧？（貌似）)
-		(不行，不行。    要考虑大数的情况！！)
 
 */
 
@@ -446,14 +466,14 @@ string BigData::Div(string left, string right)
 	int LSize = left.size() - 1;
 	for (int iIdx = 0; iIdx < LSize; )
 	{
-		if (*pLeft == '0')
+		if (*pLeft == '0')				//左数当前位为0，则在商后面追加0 并向后移位
 		{
 			sRet.append(1, '0');
 			pLeft++;
 			iIdx++;
 			continue;
 		}
-		if (!IsLeftBig(pLeft, Datalen, pRight, right.size() - 1))
+		if (!IsLeftBig(pLeft, Datalen, pRight, right.size() - 1))				//左数小的化，在商的当前位补 0， 并向后移位
 		{
 			sRet.append(1, '0');
 			Datalen++;
@@ -462,7 +482,7 @@ string BigData::Div(string left, string right)
 				break;
 			}
 		}
-		else
+		else      //左数大
 		{
 			sRet.append(1, SubLoop(pLeft, Datalen, pRight, right.size() - 1));			//可以考虑用引用传参
 			while (*pLeft == '0' && Datalen > 0)
@@ -486,7 +506,6 @@ string BigData::Div(string left, string right)
 char BigData::SubLoop(char* pLeft, int LSize, char *pRight, int RSize)
 {
 	assert(pLeft != NULL && pRight != NULL);
-	//int cCount = 0;
 	char cRet = '0';
 	while (true)
 	{
@@ -495,39 +514,7 @@ char BigData::SubLoop(char* pLeft, int LSize, char *pRight, int RSize)
 			break;
 		}
 		//做减法
-		int iLidx = LSize;
-		int iRidx = RSize;
-
-		//这里有问题！！ 
-		//while (iLidx)
-		//{
-		//	pLeft[iLidx] -= pRight[iRidx];
-		//	if (pLeft[iLidx] < 0)	//借位
-		//	{
-		//		pLeft[iLidx - 1] -= 1;
-		//		pLeft[iLidx] += 10;
-		//	}
-		//	iLidx--;
-		//	iRidx--;
-		//}
-
-
-		/*int LdataLen = LSize - 1;
-
-		for (int iIdx = 0; iIdx < LdataLen; ++iIdx)
-		{
-			char ret = pLeft[LSize - iIdx ] - '0';
-			ret -= pRight[RSize - iIdx - 1] - '0';
-			if (ret < 0)
-			{
-				pLeft[LSize - iIdx - 2] -= 1;
-				ret += 10;
-			}
-
-			pLeft[LSize - iIdx - 1] = ret + '0';*/
-
-
-		int LDataLen = LSize - 1;
+		int LDataLen = LSize -1;
 		int RDataLen = RSize - 1;
 		while (LDataLen >= 0 && RDataLen >= 0)
 		{
@@ -549,8 +536,8 @@ char BigData::SubLoop(char* pLeft, int LSize, char *pRight, int RSize)
 			LSize--;
 		}
 		cRet++;
-		return cRet;
 	}
+	return cRet;
 }
 
 bool BigData::IsLeftBig(char * pLeft, int LSize, char * pRight, int RSize)
